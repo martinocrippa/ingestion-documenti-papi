@@ -35,6 +35,7 @@ manca la gestione delle differenti tipologie di testi per estrarre il corpo corr
 * con LSA(latent semantic analysis basata su riduzione del piano SVD singular-value-decomposition le spiegava lovaglio in analisi dei dati), tecnica vecchia scuola (come implementata ad ora nella tecnologia SAS)
 * con LDA(latent dirichlet allocation), tecnica anni '90 con statistica bayesiana (di cui non capisco una minchia) --> c'è un articolo in letteratura che mi dà una collega sull'applicazione ai twitter di TRUMP
 * con NMF(non-negative matrix factorization), tecnica anni 2000 per cui si entrerebbe nel machine learning
+* con RETI NEURALI continuous Skip-gram mode (https://arxiv.org/pdf/1310.4546.pdf) 
 
 ## 5. SHINIY o PACKAGE
 infilarlo dentro un applicazione SHINY
