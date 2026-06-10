@@ -1,3 +1,4 @@
+# Python >= 3.9 (consigliato 3.12). Setup conda: setup/environment.yml
 requests>=2.31
 beautifulsoup4>=4.12
 lxml>=4.9

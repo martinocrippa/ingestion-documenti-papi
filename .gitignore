@@ -5,8 +5,11 @@ __pycache__/
 venv/
 
 # Artefatti locali
-# La wiki e' rigenerabile con lo script (python test/scarica_tutto.py),
+# Il corpus e' rigenerabile con lo script (python test/scarica_tutto.py),
 # quindi non viene versionata: 25k+ file, ~260 MB, testi sotto copyright.
 data/
 data_test/
 *.log
+
+# PDF dei paper di riferimento (catalogo in resources/README.md)
+resources/*.pdf

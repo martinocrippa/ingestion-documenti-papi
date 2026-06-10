@@ -1,6 +1,6 @@
 """TextMiningPapa - scraping dei documenti dei Papi dal sito vaticano.
 
-Produce una *wiki markdown* (un file .md per documento + INDEX.md) pronta
+Produce un corpus markdown (un file .md per documento + INDEX.md) pronto
 per l'analisi e per l'uso con LLM/RAG.
 
 Uso tipico::
@@ -13,7 +13,7 @@ Uso tipico::
 Moduli:
     modello   - dati: Papa, PAPI, TIPOLOGIE, Documento
     scraping  - rete, discovery degli indici, parsing dei documenti
-    wiki      - generazione markdown e orchestrazione del download
+    corpus    - markdown, indice, download e controllo aggiornamenti
 """
 
 import logging
@@ -28,8 +28,10 @@ from .scraping import (
     scarica,
     trova_documenti,
 )
-from .wiki import (
+from .corpus import (
+    controlla_nuovi,
     nome_file,
+    ricostruisci_index,
     scarica_papa,
     scarica_tutti,
     scrivi_index,
@@ -48,4 +50,5 @@ __all__ = [
     "trova_documenti", "estrai_corpo", "leggi_documento",
     "to_markdown", "nome_file",
     "scarica_papa", "scrivi_index", "scarica_tutti",
+    "ricostruisci_index", "controlla_nuovi",
 ]

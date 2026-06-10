@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Smoke test: scarica pochi documenti per ciascun Papa e verifica.
 
 Esegue un controllo rapido (3 angelus per Papa, anni campione) per
