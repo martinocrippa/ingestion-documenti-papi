@@ -11,6 +11,25 @@ separati (vedi [Prossimi passi](#prossimi-passi)).
 
 ---
 
+## Da dove nasce
+
+Nasce da una di quelle domande grandi che capita di farsi tra amici, leggendo i
+giornali: di che cosa parlano *davvero* i Papi? C'è una continuità tra un
+pontificato e l'altro, o ognuno tira da un'altra parte? Quando un titolo dice
+"il Papa parla solo di migranti" o "di ambiente", è vero o è il taglio del
+giornale? Sono discorsi che finiscono in fretta sul senso della vita, sulla
+fede, su che cosa la Chiesa dice al mondo — e a un certo punto è venuta voglia
+di **smettere di tirare a indovinare e guardare i dati**.
+
+I dati ci sono: decenni di Angelus, omelie, discorsi, messaggi, tutti pubblicati
+sul sito del Vaticano. Bastava raccoglierli in modo ordinato per poterci poi
+fare sopra domande serie — confronti tra Papi, temi nel tempo, ricerca per
+significato. Questo repository è il **primo gradino**: portare a casa quei testi,
+puliti e in un formato su cui si può lavorare. Le risposte vere arrivano dopo,
+negli stadi successivi del progetto.
+
+---
+
 ## Come è nato e come l'abbiamo rivisto
 
 **Cosa avevamo pensato (2019).** Un progetto in R che faceva tutto insieme:
@@ -60,7 +79,7 @@ Dettagli in [setup/README.md](setup/README.md). Con l'ambiente attivo,
 ## Uso
 
 ```bash
-python papi.py              # scarica tutto in data/ (alcune ore)
+python papi.py              # scarica tutto in data/ (diverse ore: Crawl-delay 2s)
 python test/smoke_test.py   # test rapido (3 angelus x 4 Papi -> data_test/)
 python test/check_dati.py   # check sui dati: conteggi e temi nel corpus
 ```
@@ -80,9 +99,24 @@ esistono già su disco).
 
 ---
 
-## Le primitive del progetto
+## Il disegno: poche primitive che si compongono
 
-Tutto `papi.py` si regge su pochi mattoni:
+L'idea di fondo è semplice e dichiarata: **niente sovrastrutture**. Non c'è un
+package, non ci sono classi, non c'è un framework. C'è un solo file fatto di
+**poche primitive** — piccole funzioni che fanno una cosa sola e si combinano,
+appoggiate su strutture dati elementari (un dizionario per i Papi, una tupla per
+le tipologie). Si legge dall'alto verso il basso come una ricetta: `_get`
+scarica, `_data`/`_anno` leggono la data, `trova_documenti` raccoglie gli URL,
+`_corpo`/`_markdown` costruiscono il file, `scarica` mette tutto insieme.
+
+Il vantaggio non è estetico: quando ogni pezzo è piccolo e isolato, capirlo,
+testarlo e cambiarlo costa poco. Funzionalità che altrove richiederebbero codice
+qui escono "gratis" dalla composizione — per esempio il download incrementale è
+semplicemente *"se il file esiste, salta"*, non un sistema di sincronizzazione.
+Si aggiunge complessità solo quando il sito reale la impone (vedi i due fatti
+qui sotto), mai per principio.
+
+Tutto `papi.py` si regge quindi su pochi mattoni:
 
 | Primitiva | Cosa fa |
 |---|---|
@@ -127,6 +161,30 @@ Cari fratelli e sorelle, buon anno! ...
 
 I dati non sono versionati in git (rigenerabili, ~260 MB, testi sotto
 copyright): chiunque li ricrea con `python papi.py`.
+
+---
+
+## Robots.txt e copyright
+
+Lo scraping qui è pensato per essere **educato e a norma**, per uso personale e
+di studio:
+
+- **robots.txt** — il [robots.txt di vatican.va](https://www.vatican.va/robots.txt)
+  consente la scansione di tutto (`Allow: *`) ma chiede `Crawl-delay: 2`. Lo
+  script rispetta la pausa di **2 secondi** tra una richiesta e l'altra
+  (costante `CRAWL_DELAY` in `papi.py`); per questo un download completo richiede
+  diverse ore. Un `User-Agent` esplicito identifica il client.
+- **Copyright** — i testi sono di **© Libreria Editrice Vaticana / Dicastero per
+  la Comunicazione**. Per questo **non vengono ridistribuiti**: la cartella
+  `data/` è in `.gitignore` e nel repo non è pubblicato nessun testo reale (solo
+  un documento finto di esempio negli altri repo). I file si rigenerano in
+  locale dalla fonte ufficiale e servono ad analisi personali e di ricerca, con
+  citazione della fonte (l'`url` originale è nel frontmatter di ogni file). Per
+  usi diversi (es. ripubblicazione o usi commerciali) va richiesta
+  l'autorizzazione alla Libreria Editrice Vaticana.
+
+In breve: scarichiamo ciò che il sito permette, alla velocità che chiede, e
+teniamo i testi protetti fuori dal versionamento.
 
 ---
 

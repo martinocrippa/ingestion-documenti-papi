@@ -28,7 +28,7 @@ def main():
     tot = 0
     for papa, anni in CASI:
         tot += scarica(papa, "angelus", anni=anni,
-                       out="data_test", max_n=3, delay=0.2)
+                       out="data_test", max_n=3)   # delay = Crawl-delay robots.txt
     ok = tot >= 6
     print("\nESITO:", "OK" if ok else "FALLITO", f"({tot} documenti)")
     return 0 if ok else 1

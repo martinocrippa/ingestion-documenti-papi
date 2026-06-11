@@ -27,6 +27,10 @@ from bs4 import BeautifulSoup
 
 BASE = "https://www.vatican.va"
 
+# Pausa fra una richiesta e l'altra. Il robots.txt di vatican.va chiede
+# "Crawl-delay: 2": rispettiamo i 2 secondi per essere crawler educati.
+CRAWL_DELAY = 2.0
+
 # chiave (= cartella di output) -> (slug sul sito, nome leggibile)
 PAPI = {
     "francesco":         ("francesco", "Papa Francesco"),
@@ -41,7 +45,7 @@ _SESS = requests.Session()
 _SESS.headers["User-Agent"] = "TextMiningPapa/2.0 (+python)"
 
 
-def _get(url, delay=0.3):
+def _get(url, delay=CRAWL_DELAY):
     """Scarica e fa il parse di una pagina (None se fallisce)."""
     try:
         r = _SESS.get(url, timeout=30)
@@ -49,7 +53,7 @@ def _get(url, delay=0.3):
     except requests.RequestException:
         return None
     r.encoding = "utf-8"        # l'header HTTP mente, il sito e' UTF-8
-    time.sleep(delay)           # gentile col server
+    time.sleep(delay)           # rispetta il Crawl-delay del robots.txt
     return BeautifulSoup(r.text, "lxml")
 
 
@@ -74,7 +78,7 @@ def _anno(url):
     return int(m.group(1)) if m else None
 
 
-def trova_documenti(slug, tipo, anni=None, delay=0.3):
+def trova_documenti(slug, tipo, anni=None, delay=CRAWL_DELAY):
     """Crawl ricorsivo degli indici: ritorna gli URL dei documenti.
 
     Segue i sotto-indici (anni, trimestri) perche' gli indici grandi
@@ -148,7 +152,7 @@ def _markdown(url, nome, tipo, sp):
     return testo, bool(corpo.strip())
 
 
-def scarica(papa, tipo, anni=None, out="data", max_n=None, delay=0.3):
+def scarica(papa, tipo, anni=None, out="data", max_n=None, delay=CRAWL_DELAY):
     """Scarica i documenti di (papa, tipo), saltando quelli gia' presenti.
 
     Lo skip-se-esiste rende il download incrementale: rilanciare scarica
@@ -178,7 +182,7 @@ def scarica(papa, tipo, anni=None, out="data", max_n=None, delay=0.3):
 
 
 def scarica_tutto(papi=tuple(PAPI), tipologie=TIPOLOGIE, anni=None,
-                  out="data", max_n=None, delay=0.3):
+                  out="data", max_n=None, delay=CRAWL_DELAY):
     """Scarica tutte le combinazioni (papa, tipologia) richieste."""
     tot = sum(scarica(p, t, anni, out, max_n, delay)
               for p in papi for t in tipologie)

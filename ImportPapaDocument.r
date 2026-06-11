@@ -27,7 +27,7 @@ TIPOLOGIE <- c("angelus", "audiences", "homilies", "speeches",
 
 .get <- function(url) {
   pagina <- tryCatch(read_html(url), error = function(e) NULL)
-  Sys.sleep(0.3)                       # gentile col server
+  Sys.sleep(2)                         # Crawl-delay del robots.txt di vatican.va
   pagina
 }
 
