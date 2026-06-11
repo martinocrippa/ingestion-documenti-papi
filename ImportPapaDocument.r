@@ -1,147 +1,138 @@
-#' Scraping dei documenti dei Papi dal sito vaticano (versione R)
-#'
-#' Versione semplificata e aggiornata al sito attuale
-#' (https://www.vatican.va). Per la versione consigliata e testata vedi
-#' lo script Python `scrape_papa.py`.
-#'
-#' Note rispetto all'originale storico:
-#'   - dominio aggiornato da w2.vatican.va a www.vatican.va;
-#'   - il corpo del testo si estrae dal contenitore `div.testo`
-#'     (niente piu' slice fisso per riga);
-#'   - la vecchia logica "multipagina" basata sugli <span> non esiste
-#'     piu': gli indici grandi si sviluppano in sotto-indici, qui
-#'     raccolti con una visita ricorsiva;
-#'   - gestiti entrambi gli schemi di URL dei documenti (vecchio/nuovo).
-#'
-#' @param slug_papa  Char, segmento URL del Papa (es. "francesco",
-#'   "leo-xiv", "benedict-xvi", "john-paul-ii").
-#' @param nome_papa  Char, nome leggibile (es. "Papa Francesco").
-#' @param tipologie  Vettore di tipologie (es. c("angelus", "homilies")).
-#' @param anni       Vettore di anni a cui limitarsi (NULL = tutti).
-#' @param delay      Numerico, pausa in secondi fra le richieste HTTP.
-#' @return Un tibble con: url, papa, tipologia, titolo, data, testo,
-#'   n_parole.
-#' @examples
-#' df <- ImportPapaDocument("francesco", "Papa Francesco",
-#'                          tipologie = "angelus", anni = 2025)
+#!/usr/bin/env Rscript
+# TextMiningPapa - scarica i documenti dei Papi dal sito vaticano come
+# file markdown (dati raw). Versione R, monofile, equivalente a papi.py.
+#
+# Due verita' del sito: l'header HTTP mente sull'encoding (il sito e' UTF-8);
+# i Papi recenti e vecchi usano due schemi di URL per la data.
+#
+# Uso:  Rscript ImportPapaDocument.r                 # scarica tutto in data/
+#       source("ImportPapaDocument.r"); scarica("francesco", "angelus", 2025)
+#
+# Nota: non testato (R non disponibile in fase di sviluppo). La versione di
+# riferimento e' papi.py.
 
 library(rvest)
-library(dplyr)
-library(stringr)
-library(purrr)
 
-BASE_URL <- "https://www.vatican.va"
+BASE <- "https://www.vatican.va"
 
+# chiave (= cartella) -> c(slug sul sito, nome leggibile)
+PAPI <- list(
+  "francesco"         = c("francesco",    "Papa Francesco"),
+  "leone-xiv"         = c("leo-xiv",       "Papa Leone XIV"),
+  "benedetto-xvi"     = c("benedict-xvi",  "Papa Benedetto XVI"),
+  "giovanni-paolo-ii" = c("john-paul-ii",  "Papa Giovanni Paolo II")
+)
+TIPOLOGIE <- c("angelus", "audiences", "homilies", "speeches",
+               "messages", "letters", "cotidie", "travels")
 
-# --- date: estrae YYYYMMDD dal nome file, entrambi gli schemi URL -------- #
-.estrai_data <- function(url) {
+.get <- function(url) {
+  pagina <- tryCatch(read_html(url), error = function(e) NULL)
+  Sys.sleep(0.3)                       # gentile col server
+  pagina
+}
+
+.data <- function(url) {               # data dal nome file, entrambi gli schemi
   nome <- basename(url)
-  for (blocco in str_extract_all(nome, "\\d{8}")[[1]]) {
-    d <- as.Date(blocco, format = "%Y%m%d")
-    if (!is.na(d) && format(d, "%Y") >= "1900") {
-      return(format(d, "%Y-%m-%d"))
-    }
+  for (b in regmatches(nome, gregexpr("[0-9]{8}", nome))[[1]]) {
+    d <- as.Date(b, "%Y%m%d")
+    if (!is.na(d) && format(d, "%Y") >= "1900") return(format(d, "%Y-%m-%d"))
   }
-  NA_character_
+  ""
 }
 
 .anno <- function(url) {
-  iso <- .estrai_data(url)
-  if (!is.na(iso)) return(as.integer(substr(iso, 1, 4)))
-  m <- str_match(url, "/(\\d{4})(?:\\.index|/)")[, 2]
-  if (!is.na(m)) as.integer(m) else NA_integer_
+  iso <- .data(url)
+  if (nzchar(iso)) return(as.integer(substr(iso, 1, 4)))
+  m <- regmatches(url, regexec("/([0-9]{4})(?:\\.index|/)", url))[[1]]
+  if (length(m) >= 2) as.integer(m[2]) else NA_integer_
 }
 
-
-# --- discovery: visita ricorsiva degli indici di una tipologia ----------- #
-.trova_documenti <- function(slug_papa, tipo, anni, delay) {
-  radice <- sprintf("%s/content/%s/it/%s", BASE_URL, slug_papa, tipo)
-  da_visitare <- paste0(radice, ".index.html")
-  visti <- character(0)
-  documenti <- character(0)
-
-  while (length(da_visitare) > 0 && length(visti) < 500) {
-    url <- da_visitare[1]
-    da_visitare <- da_visitare[-1]
+trova_documenti <- function(slug, tipo, anni = NULL) {
+  radice <- sprintf("%s/content/%s/it/%s", BASE, slug, tipo)
+  coda <- paste0(radice, ".index.html")
+  visti <- character(0); docs <- character(0)
+  while (length(coda) > 0 && length(visti) < 500) {
+    url <- coda[1]; coda <- coda[-1]
     if (url %in% visti) next
     visti <- c(visti, url)
-
-    pagina <- tryCatch(read_html(url), error = function(e) NULL)
-    if (is.null(pagina)) next
-    Sys.sleep(delay)
-
-    href <- html_attr(html_nodes(pagina, "a"), "href")
+    sp <- .get(url); if (is.null(sp)) next
+    href <- html_attr(html_elements(sp, "a"), "href")
     href <- href[!is.na(href)]
-    link <- ifelse(startsWith(href, "http"), href, paste0(BASE_URL, href))
-
-    # solo link interni a questa tipologia
-    link <- link[str_detect(link, sprintf("/content/%s/it/", slug_papa)) &
-                   str_detect(link, sprintf("/%s[\\./]", tipo))]
-
-    e_doc <- str_detect(link, "/documents/") & str_detect(link, "\\.html$")
-    e_idx <- str_detect(link, "\\.index\\.html$")
-
-    docs <- link[e_doc]
+    link <- ifelse(startsWith(href, "http"), href, paste0(BASE, href))
+    link <- link[grepl(sprintf("/content/%s/it/", slug), link) &
+                   grepl(sprintf("/%s[./]", tipo), link)]
+    doc <- link[grepl("/documents/", link) & grepl("\\.html$", link)]
+    if (!is.null(anni)) doc <- doc[vapply(doc, .anno, 1L) %in% anni]
+    docs <- union(docs, doc)
+    idx <- setdiff(link[grepl("\\.index\\.html$", link)], visti)
     if (!is.null(anni)) {
-      docs <- docs[map_int(docs, .anno) %in% anni]  # NA escluso
+      a <- vapply(idx, .anno, 1L)
+      idx <- idx[is.na(a) | a %in% anni]
     }
-    documenti <- union(documenti, docs)
-
-    nuovi <- setdiff(link[e_idx], visti)
-    if (!is.null(anni)) {
-      a_idx <- map_int(nuovi, .anno)
-      nuovi <- nuovi[is.na(a_idx) | a_idx %in% anni]
-    }
-    da_visitare <- union(da_visitare, nuovi)
+    coda <- union(coda, idx)
   }
-  sort(documenti)
+  sort(docs)
 }
 
-
-# --- corpo: estratto da div.testo (fallback div.documento) --------------- #
-.estrai_corpo <- function(pagina) {
-  cont <- html_node(pagina, "div.testo")
-  if (inherits(cont, "xml_missing") || is.na(cont)) {
-    cont <- html_node(pagina, "div.documento")
-  }
-  par <- html_text(html_nodes(cont, "p"), trim = TRUE)
-  par <- par[par != "" &
-               !str_detect(par, "^(\\[?\\s*[Mm]ultimedia|_{3,}|Copyright)")]
+.corpo <- function(sp) {               # testo da div.testo (corpo pulito)
+  cont <- html_element(sp, "div.testo")
+  if (inherits(cont, "xml_missing")) cont <- html_element(sp, "div.documento")
+  if (inherits(cont, "xml_missing")) return("")
+  par <- html_text2(html_elements(cont, "p"))
+  rumore <- "^(\\[?\\s*[Mm]ultimedia|_{3,}|Copyright)"
+  par <- par[nzchar(par) & !grepl(rumore, par)]
   paste(par, collapse = "\n\n")
 }
 
-
-#' @rdname ImportPapaDocument
-#' @export
-ImportPapaDocument <- function(slug_papa,
-                               nome_papa,
-                               tipologie = c("angelus"),
-                               anni = NULL,
-                               delay = 0.3) {
-  righe <- list()
-
-  for (tipo in tipologie) {
-    message(sprintf("NOTE: ===> %s / %s", slug_papa, tipo))
-    urls <- .trova_documenti(slug_papa, tipo, anni, delay)
-    message(sprintf("NOTE: trovati %d documenti", length(urls)))
-
-    for (url in urls) {
-      pagina <- tryCatch(read_html(url), error = function(e) NULL)
-      if (is.null(pagina)) next
-      Sys.sleep(delay)
-
-      testo <- .estrai_corpo(pagina)
-      righe[[length(righe) + 1]] <- tibble(
-        url        = url,
-        papa       = nome_papa,
-        tipologia  = tipo,
-        titolo     = html_text(html_node(pagina, "title"), trim = TRUE),
-        data       = .estrai_data(url),
-        testo      = testo,
-        n_parole   = str_count(testo, "\\w+")
-      )
-    }
-  }
-
-  bind_rows(righe)
+.markdown <- function(url, nome, tipo, sp) {
+  titolo <- html_text2(html_element(sp, "title"))
+  corpo <- .corpo(sp)
+  q <- function(s) paste0('"', gsub('"', '\\\\"', s), '"')
+  parole <- lengths(regmatches(corpo, gregexpr("\\w+", corpo)))
+  testo <- paste(c(
+    "---",
+    paste("papa:", q(nome)),
+    paste("tipologia:", tipo),
+    paste("data:", .data(url)),
+    paste("titolo:", q(titolo)),
+    paste("url:", url),
+    paste("parole:", parole),
+    "---", "",
+    paste("#", titolo), "",
+    corpo, ""
+  ), collapse = "\n")
+  list(testo = testo, ok = nzchar(trimws(corpo)))
 }
+
+scarica <- function(papa, tipo, anni = NULL, out = "data", max_n = NULL) {
+  slug <- PAPI[[papa]][1]; nome <- PAPI[[papa]][2]
+  urls <- trova_documenti(slug, tipo, anni)
+  if (!is.null(max_n)) urls <- head(urls, max_n)
+  cartella <- file.path(out, papa, tipo)
+  n <- 0
+  for (url in urls) {
+    f <- file.path(cartella, sub("\\.html$", ".md", basename(url)))
+    if (file.exists(f)) next           # incrementale: non riscarico
+    sp <- .get(url); if (is.null(sp)) next
+    md <- .markdown(url, nome, tipo, sp)
+    if (!md$ok) next
+    dir.create(cartella, recursive = TRUE, showWarnings = FALSE)
+    writeLines(md$testo, f, useBytes = TRUE)
+    n <- n + 1
+  }
+  message(sprintf("[%s/%s] %d nuovi, %d totali online",
+                  papa, tipo, n, length(urls)))
+  n
+}
+
+scarica_tutto <- function(papi = names(PAPI), tipologie = TIPOLOGIE,
+                          anni = NULL, out = "data", max_n = NULL) {
+  tot <- 0
+  for (p in papi) for (t in tipologie) {
+    tot <- tot + scarica(p, t, anni, out, max_n)
+  }
+  message(sprintf("Totale nuovi documenti: %d", tot))
+  invisible(tot)
+}
+
+if (sys.nframe() == 0) scarica_tutto()

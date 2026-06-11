@@ -1,17 +1,41 @@
-# TextMiningPapa
+# ingestion-documenti-papi
 
-Scraping dei documenti dei Papi dal sito vaticano e costruzione di un
-**corpus markdown** pronto per l'analisi e per l'uso con LLM/RAG.
+Scarica i documenti dei Papi dal sito vaticano e li salva come **file
+markdown** (un file per documento, con frontmatter YAML e testo pulito).
 
-Ogni documento (angelus, omelia, discorso, ecc.) viene salvato come file
-`.md` con frontmatter YAML e testo pulito, più un `INDEX.md` di navigazione.
+**Questo repository fa una cosa sola: l'ingestion dei dati raw.** Niente
+arricchimento, niente analisi, niente database. Quelli vivono in repository
+separati (vedi [Prossimi passi](#prossimi-passi)).
 
-**Papi supportati:** Francesco · Leone XIV · Benedetto XVI · Giovanni Paolo II
-(gestiti entrambi gli schemi di URL del sito, vecchio e nuovo).
+**Papi:** Francesco · Leone XIV · Benedetto XVI · Giovanni Paolo II.
 
-> 📌 **Nota.** Progetto nato in R nel **2019** e ripreso/modernizzato nel
-> **2026**, dopo circa **7 anni**: porting a Python, aggiornamento al sito
-> vaticano attuale e output in formato markdown per l'uso con gli LLM.
+---
+
+## Come è nato e come l'abbiamo rivisto
+
+**Cosa avevamo pensato (2019).** Un progetto in R che faceva tutto insieme:
+scraping dei documenti *e* text mining (pulizia, frequenze, topic modeling con
+LSA/LDA/NMF), con l'idea di arrivare a un'app Shiny e a un articolo.
+
+**Cosa abbiamo fatto (2026).** Ripreso dopo ~7 anni: porting a Python,
+aggiornamento al sito vaticano attuale, scaricati ~25.000 documenti dei 4 Papi
+in markdown. Poi abbiamo valutato le tecniche moderne di analisi e pianificato
+una pipeline ricca.
+
+**Come l'abbiamo rivisto.** Quella pipeline era sproporzionata rispetto
+all'obiettivo, e mescolava cose diverse nello stesso posto. Abbiamo separato le
+responsabilità in stadi, un repository ciascuno:
+
+1. **ingestion** (questo repo) — scaricare i dati raw, in modo semplice e robusto;
+2. **dati raw** — la cartella `data/`, tenuta in locale (rigenerabile);
+3. **enrichment** — database arricchito (in un repo dedicato);
+4. **analisi & esposizione** — analisi e dashboard (in un repo dedicato).
+
+Di conseguenza il codice è stato ridotto a **un solo file** per linguaggio
+(`papi.py`, `ImportPapaDocument.r`), con strutture dati elementari e senza
+sovrastrutture (niente package, niente classi, niente indice da mantenere). Il
+controllo dei "nuovi documenti" è diventato gratuito: lo scraper **salta i file
+già presenti**, quindi rilanciarlo scarica solo ciò che manca.
 
 ---
 
@@ -30,65 +54,61 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 ```
 
-Istruzioni complete in **[setup/README.md](setup/README.md)**. Con l'ambiente
-attivo, `python` punta sempre a Python 3.
+Dettagli in [setup/README.md](setup/README.md). Con l'ambiente attivo,
+`python` è Python 3.
 
 ## Uso
 
-```python
-from scrape_papa import scarica_papa, scarica_tutti, scrivi_index, PAPI
-
-# Un Papa, una tipologia, un anno (ideale per provare)
-docs = scarica_papa(PAPI["francesco"], tipologie=["angelus"], anni=[2025])
-scrivi_index(docs)
-
-# Sottoinsieme mirato
-scarica_tutti(papi=["benedetto-xvi", "giovanni-paolo-ii"],
-              tipologie=["angelus", "homilies"], anni=range(2005, 2010))
-
-# Download completo: tutti i Papi, tutte le tipologie, tutti gli anni
-scarica_tutti()
-```
-
-Script pronti all'uso nella cartella [`test/`](test/):
-
 ```bash
-python test/smoke_test.py        # test rapido (3 angelus x 4 Papi -> data_test/)
-python test/scarica_tutto.py     # download completo -> data/ (richiede ore)
-python test/controlla_nuovi.py   # controlla nuovi documenti sul sito vaticano
+python papi.py              # scarica tutto in data/ (alcune ore)
+python test/smoke_test.py   # test rapido (3 angelus x 4 Papi -> data_test/)
+python test/check_dati.py   # check sui dati: conteggi e temi nel corpus
 ```
 
-### Parametri principali
+Oppure come libreria:
 
-| Parametro       | Descrizione                                              |
-|-----------------|----------------------------------------------------------|
-| `tipologie`     | `angelus, audiences, homilies, speeches, messages, letters, cotidie, travels` |
-| `anni`          | lista/range di anni (omesso = tutti)                     |
-| `max_per_tipo`  | tetto di documenti per tipologia (per i test)            |
-| `delay`         | pausa fra richieste HTTP (default 0.3s)                  |
+```python
+from papi import scarica, scarica_tutto, PAPI
 
-## Struttura del codice
-
+scarica("francesco", "angelus", anni=[2025])   # un Papa, un tipo, un anno
+scarica_tutto(anni=range(2013, 2025))           # sottoinsieme
+scarica_tutto()                                  # tutto
 ```
-scrape_papa/
-  modello.py    # dati: Papa, PAPI, TIPOLOGIE, Documento
-  scraping.py   # rete, discovery degli indici, parsing dei documenti
-  corpus.py     # markdown, indice, download e controllo aggiornamenti
-  __init__.py   # API pubblica
-```
+
+Rilanciare `python papi.py` riscarica **solo i documenti nuovi** (gli altri
+esistono già su disco).
+
+---
+
+## Le primitive del progetto
+
+Tutto `papi.py` si regge su pochi mattoni:
+
+| Primitiva | Cosa fa |
+|---|---|
+| `PAPI` | dizionario `chiave → (slug sul sito, nome)`. La chiave è anche la cartella. |
+| `TIPOLOGIE` | tupla dei tipi di documento (`angelus`, `homilies`, …). |
+| `_get(url)` | scarica una pagina e la fa parsare; forza UTF-8, pausa fra le richieste. |
+| `_data(url)` / `_anno(url)` | estraggono la data dal nome file (gestendo i **due schemi di URL** del sito). |
+| `trova_documenti(slug, tipo)` | crawl ricorsivo degli indici → lista di URL dei documenti (segue i sotto-indici annuali/trimestrali). |
+| `_corpo(sp)` | estrae il testo pulito dal contenitore `div.testo`. |
+| `_markdown(...)` | compone frontmatter + corpo. |
+| `scarica(papa, tipo)` | mette tutto insieme e scrive i file, **saltando quelli esistenti**. |
+
+Due fatti del sito, scoperti sul campo e annotati nel codice:
+
+1. l'header HTTP dichiara `ISO-8859-1`, ma il contenuto è **UTF-8**;
+2. i Papi recenti e quelli vecchi usano **due schemi di URL** diversi per la
+   data (`20250101-angelus.html` vs `hf_ben-xvi_..._20050424_...html`).
 
 ## Output
 
 ```
 data/
   francesco/angelus/20250101-angelus.md
-  leone-xiv/angelus/20250511-regina-caeli.md
-  benedetto-xvi/angelus/hf_ben-xvi_ang_20060101_world-day-peace.md
   giovanni-paolo-ii/angelus/hf_jp-ii_ang_20030101.md
-  INDEX.md
+  ...
 ```
-
-Esempio di file generato:
 
 ```markdown
 ---
@@ -102,112 +122,50 @@ parole: 862
 
 # Angelus, 1° gennaio 2025, ...
 
-- **Papa:** Papa Francesco
-- **Data:** 2025-01-01
-- **Fonte:** <https://...>
-
----
-
 Cari fratelli e sorelle, buon anno! ...
 ```
 
-## Controllo dei nuovi documenti
-
-Per tenere il corpus aggiornato senza riscaricare tutto (confronta gli indici
-online con i `.md` locali):
-
-```bash
-python test/controlla_nuovi.py            # report dei nuovi documenti
-python test/controlla_nuovi.py --scarica  # scarica e ricostruisce l'INDEX.md
-```
+I dati non sono versionati in git (rigenerabili, ~260 MB, testi sotto
+copyright): chiunque li ricrea con `python papi.py`.
 
 ---
 
-# Stato e piano
+## Versione R
 
-La raccolta dati è completa e modernizzata. L'analisi text-mining proseguirà in
-un **nuovo repository** basato su questo corpus. Questo repo resta come base di
-**raccolta dati + ricerca/pianificazione**.
-
-## Dove eravamo (2019) → dove siamo (2026)
-
-| Obiettivo originale (2019) | Stato | Approccio moderno (2026) |
-|---|---|---|
-| Scraping documenti dei Papi | ✅ fatto | Python, sito attuale, 4 Papi, ~25k doc in markdown |
-| Estrazione corpo per tipologia | ✅ risolto | `div.testo` invece dello slice fisso |
-| Pulizia testo (token, stop-word, lemmi, stemming) | 🔄 ripensato | spaCy `it`/multilingue per la baseline; per gli embedding spesso **non serve** pulizia aggressiva |
-| Studio delle frequenze | ⬜ → nuovo repo | TF-IDF + **keyness** tra Papi/anni + embeddings semantici |
-| Topic modeling (LSA/LDA/NMF/reti neurali) | ⬜ → nuovo repo | **BERTopic** + **dynamic topic models** (trend nel tempo) |
-| App Shiny / packaging | ⬜ → nuovo repo | App/dashboard (Streamlit/Gradio) |
-| Domande di analisi (migranti, continuità) | ⬜ → nuovo repo | **RAG** + dynamic topic modeling + keyness |
-
-## Obiettivi riletti con tecniche moderne
-
-- **Pulizia testo.** La pipeline classica (token → stop-word → lemmi → stemming)
-  serve *solo* per le analisi statistiche; per l'italiano **lemmi sì, stemming
-  no**. Gli approcci a embedding lavorano sul **testo grezzo**.
-- **Frequenze.** Conteggi + **keyness** (log-likelihood) per "cosa caratterizza
-  ciascun Papa", n-grammi, e **similarità semantica** via embeddings.
-- **Topic modeling.** Da LSA/LDA/NMF a **BERTopic** + **dynamic topic models**
-  (RollingLDA + change-point, o il sistema open *DTECT*) per l'evoluzione
-  temporale, con **labeling LLM** sotto validazione umana. Su corpus medio LDA
-  resta competitivo per interpretabilità.
-
-## Domande di ricerca, riformulate
-
-| Domanda (2019) | Come rispondere oggi |
-|---|---|
-| Di cosa parla l'ultimo Papa? Solo migranti? | Topic modeling + keyness + conteggio concetti nel tempo; RAG per citazioni |
-| C'è continuità tra gli ultimi tre Papi? | Confronto topic/lessico per pontificato; distanza semantica fra corpora |
-| *(nuove)* Evoluzione di pace, ambiente, misericordia? | **Dynamic topic modeling** con change-point sulle date |
-| *(nuove)* Quali frame morali/valoriali ricorrono? | Annotazione frame morali (Capraro, *language-based preferences* / LENS) |
-
-> **Principio guida (filone Quattrociocchi):** statistica classica come
-> baseline, LLM per interpretazione/etichettatura, **mai come giudice autonomo**
-> → validazione su gold set umano (effetto "epistemia", bias documentati).
-
-## Architettura proposta per il nuovo repo
-
-Workflow a 3 fasi (la Fase 1 è già completa qui):
-
-1. **Testi** ✅ — input: il corpus markdown di questo repo.
-2. **Arricchimento → database di analisi.** Per ogni documento: topic+keywords
-   (BERTopic), entità (NER), sentiment + **frame morali/valoriali** (dimensioni
-   **LENS** di Capraro: frame linguistico, emozione, norma), embeddings (vector
-   store), metriche di stile. Storage: **frontmatter esteso** + **SQLite/Parquet**
-   + **indice vettoriale**.
-3. **Analisi.** Trend temporali, keyness tra Papi, evoluzione di concetti,
-   **RAG/Q&A**, confronto comparativo, dashboard.
-
-**Stack suggerito:** `sentence-transformers` (multilingue), `BERTopic`, `spaCy`
-(it), `scikit-learn`, un vector store (Chroma/FAISS), un LLM per labeling/RAG.
-
-## Documentazione
-
-- **[resources/review-tecniche-analisi-testi.md](resources/review-tecniche-analisi-testi.md)**
-  — review accademica delle tecniche, con citazioni verificate.
-- **[resources/README.md](resources/README.md)** — catalogo dei paper
-  (Quattrociocchi, Capraro, topic modeling, LLM-as-judge, RAG).
-
-## Checklist di chiusura
-
-- [x] Scraping completo (25k documenti) e corpus markdown
-- [x] Tool di controllo nuovi documenti
-- [x] Review delle tecniche con paper di riferimento
-- [x] Ricerca mirata su Valerio Capraro (frame morali / LENS / sentiment)
-- [ ] Revisione manuale di codice e documenti
-- [ ] Commit finale di questo repo
-- [ ] Creazione del **nuovo repository di analisi** basato su questi dati
-
----
-
-## Versione R (storica)
-
-`ImportPapaDocument.r` è il porting in R della stessa logica, aggiornato al
-sito attuale e semplificato. La versione di riferimento testata è quella
-Python (package `scrape_papa/`).
+`ImportPapaDocument.r` è l'equivalente monofile in R (rvest): stessa logica,
+stesso output markdown, stesso skip-se-esiste. La versione di riferimento
+testata è quella Python.
 
 ```r
-df <- ImportPapaDocument("francesco", "Papa Francesco",
-                         tipologie = "angelus", anni = 2025)
+Rscript ImportPapaDocument.r            # scarica tutto in data/
+# oppure: source("ImportPapaDocument.r"); scarica("francesco", "angelus", 2025)
 ```
+
+---
+
+## Primi risultati (solo un check, non un'analisi)
+
+`test/check_dati.py` dà un primo sguardo al corpus con un semplice conteggio di
+parole chiave. Esempio — *"Papa Francesco parla solo di migranti?"* → **no**: è
+il tema meno citato anche da lui (12% dei documenti), mentre pace (54%) e
+famiglia (52%) dominano come per tutti i Papi. Rispetto ai predecessori si
+stacca però su **migranti** e **poveri** (lift ~1,2-1,6).
+
+⚠️ È solo un conteggio di stringhe, con limiti precisi: non coglie il
+significato. Quando Francesco parla di ambiente come *"casa comune"* o *"sorella
+madre terra"*, la regola non lo riconosce come tema "ambiente". Superare questo
+è esattamente il compito dell'analisi semantica (embeddings) nel repo di
+enrichment.
+
+## Prossimi passi
+
+L'analisi non vive qui. Prosegue in repository separati, alimentati da questo
+corpus markdown:
+
+- **enrichment** — carica e arricchisce i documenti in un database (topic,
+  entità, sentiment, frame morali/valoriali, embeddings, metriche di stile);
+- **analisi & esposizione** — trend e narrazioni nel tempo, keyness tra Papi,
+  RAG/Q&A, confronto fra pontificati, dashboard.
+
+Lì confluiranno anche la rassegna delle tecniche e i risultati preliminari,
+tenuti fuori da questo repo che resta dedicato al solo download.

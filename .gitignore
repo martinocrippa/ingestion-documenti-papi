@@ -5,11 +5,13 @@ __pycache__/
 venv/
 
 # Artefatti locali
-# Il corpus e' rigenerabile con lo script (python test/scarica_tutto.py),
+# Il corpus e' rigenerabile con lo script (python papi.py),
 # quindi non viene versionata: 25k+ file, ~260 MB, testi sotto copyright.
 data/
 data_test/
 *.log
 
-# PDF dei paper di riferimento (catalogo in resources/README.md)
-resources/*.pdf
+# resources/: review tecniche, paper e risultati preliminari.
+# Tenuti in locale; confluiranno nel repository di enrichment, non qui
+# (questo repo fa solo download/ingestion dei dati raw).
+resources/

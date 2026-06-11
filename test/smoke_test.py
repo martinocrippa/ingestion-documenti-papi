@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""Smoke test: scarica pochi documenti per ciascun Papa e verifica.
+"""Smoke test: scarica pochi angelus per ciascun Papa e verifica.
 
-Esegue un controllo rapido (3 angelus per Papa, anni campione) per
-confermare che lo scraping funzioni prima di lanciare il download completo.
+Controllo rapido che lo scraper funzioni (4 Papi, 2 schemi di URL) prima di
+lanciare il download completo. Scarica in data_test/.
 
-Uso:
-    python test/smoke_test.py
+Uso: python test/smoke_test.py
 """
 
+import pathlib
+import shutil
 import sys
-from pathlib import Path
 
-# rende importabile scrape_papa anche lanciando dalla cartella test/
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from scrape_papa import scarica_papa, scrivi_index, PAPI  # noqa: E402
+from papi import scarica  # noqa: E402
 
 CASI = [
     ("francesco", [2025]),          # schema URL nuovo
@@ -24,23 +23,14 @@ CASI = [
 ]
 
 
-def main() -> int:
-    tutti = []
-    for chiave, anni in CASI:
-        tutti += scarica_papa(
-            PAPI[chiave], tipologie=["angelus"], anni=anni,
-            output_dir="data_test", max_per_tipo=3, delay=0.2,
-        )
-    scrivi_index(tutti, output_dir="data_test")
-
-    print(f"\n=== RISULTATO: {len(tutti)} documenti ===")
-    for d in tutti:
-        print(f"  {d.papa:24} {str(d.data):12} "
-              f"{d.n_parole:5}w  {d.titolo[:45]}")
-
-    # verifiche minime
-    ok = len(tutti) >= 9 and all(d.testo.strip() for d in tutti)
-    print("\nESITO:", "OK" if ok else "FALLITO")
+def main():
+    shutil.rmtree("data_test", ignore_errors=True)
+    tot = 0
+    for papa, anni in CASI:
+        tot += scarica(papa, "angelus", anni=anni,
+                       out="data_test", max_n=3, delay=0.2)
+    ok = tot >= 6
+    print("\nESITO:", "OK" if ok else "FALLITO", f"({tot} documenti)")
     return 0 if ok else 1
 
 

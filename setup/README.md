@@ -40,9 +40,12 @@ Con l'ambiente **attivo**, `python` è l'interprete Python 3 dell'ambiente:
 ```bash
 python -c "import requests, bs4, lxml; print('ok')"   # verifica librerie
 python test/smoke_test.py                              # test rapido
-python test/scarica_tutto.py                           # download completo
-python test/controlla_nuovi.py                         # controlla aggiornamenti
+python papi.py                                         # download completo
+python test/check_dati.py                              # check sui dati
 ```
+
+Rilanciare `python papi.py` scarica solo i documenti nuovi (gli altri esistono
+già su disco).
 
 > Nota: usa `python` (non `python3`) dopo aver attivato l'ambiente conda/venv —
 > al suo interno `python` punta sempre a Python 3. Gli script hanno comunque lo
