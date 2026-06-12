@@ -91,7 +91,7 @@ Altri limiti dello stesso tipo:
 
 ## Aggiornamento (2026-06-12): cosa abbiamo provato e cosa abbiamo capito
 
-Prima di costruire, abbiamo fatto uno **spike** per verificare l'ipotesi
+Prima di costruire, abbiamo fatto un **esperimento** per verificare l'ipotesi
 "gli embedding battono le parole chiave su *ambiente*" (script
 [`prove/ambiente_semantico.py`](https://github.com/martinocrippa/vectordatabase-documenti-papi)
 nel repo del vector database). Tracciamo l'esito perché ha cambiato il piano.
