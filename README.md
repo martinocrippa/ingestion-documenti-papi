@@ -212,8 +212,10 @@ stacca però su **migranti** e **poveri** (lift ~1,2-1,6).
 ⚠️ È solo un conteggio di stringhe, con limiti precisi: non coglie il
 significato. Quando Francesco parla di ambiente come *"casa comune"* o *"sorella
 madre terra"*, la regola non lo riconosce come tema "ambiente". Superare questo
-è esattamente il compito dell'analisi semantica (embeddings) nel repo di
-enrichment.
+è esattamente il compito dell'analisi semantica (embeddings) nei repo a valle.
+
+👉 Tabelle complete (%, lift per Papa) e i limiti nel dettaglio in
+[`risultati-preliminari.md`](risultati-preliminari.md).
 
 ## Prossimi passi
 
