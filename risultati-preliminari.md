@@ -89,11 +89,42 @@ Altri limiti dello stesso tipo:
 - **Nessun contesto né negazioni**: "non c'è pace" conta come "pace".
 - **Temi imposti, non scoperti**: vediamo solo i 5 temi che abbiamo deciso noi.
 
-**Come si supera (prossimo step).** Con gli **embedding semantici** ogni
-documento diventa un vettore che cattura il *significato*, non le parole
-esatte: "casa comune", "madre terra" e "ambiente" finiscono vicini nello
-spazio vettoriale. Così, invece di cercare stringhe, si misura la vicinanza
-concettuale e si lasciano **emergere i temi dai dati** (topic modeling
-moderno, clustering, RAG). È il lavoro dei repository a valle:
-**vectordatabase-documenti-papi** (embeddings, ricerca semantica) e
-**textmining-documenti-papi** (analisi e viste aggregate).
+## Aggiornamento (2026-06-12): cosa abbiamo provato e cosa abbiamo capito
+
+Prima di costruire, abbiamo fatto uno **spike** per verificare l'ipotesi
+"gli embedding battono le parole chiave su *ambiente*" (script
+[`prove/ambiente_semantico.py`](https://github.com/martinocrippa/vectordatabase-documenti-papi)
+nel repo del vector database). Tracciamo l'esito perché ha cambiato il piano.
+
+- **Fatto.** Campione di documenti, embedding multilingue (provati MiniLM e
+  `multilingual-e5-base`), per ogni documento la similarità massima col concetto
+  "ambiente/creato/casa comune", confronto con la regex.
+- **Problema 1 — la soglia non funziona.** Le similarità coseno **non sono
+  calibrate**: non c'è un cutoff "naturale" che separi on-topic/off-topic, e con
+  e5 stanno tutte schiacciate in alto (0,78–0,85). Classificare i documenti con
+  una soglia fissa è statisticamente fragile: il numero di "positivi" dipende
+  dalla soglia, non dai dati.
+- **Problema 2 — a livello di documento il recall keyword è già buono.** Un
+  discorso lungo che parla d'ambiente, *da qualche parte* usa anche
+  `ambient`/`creato`/`ecolog`: quindi la regex **lo prende lo stesso**. Il
+  vantaggio del semantico **non è** sul recall per-documento, come avevamo
+  scritto sopra: quel limite è reale ma **meno grave del previsto**.
+
+**Dove il semantico vince davvero (la correzione di rotta):**
+1. **Precisione.** La regex conta "Dio ha *creato*" o l'*ambiente* inteso come
+   stanza: falsi positivi che il significato scarta.
+2. **Retrieval di passaggi.** Trovare *la frase* "prenderci cura della casa
+   comune", non "il documento" — è il livello giusto per le citazioni (RAG).
+3. **Temi emergenti.** Far **emergere** i temi dai dati (clustering/topic
+   modeling) invece di imporne 5 scelti a mano.
+
+**Come lo realizziamo (prossimo step): ricerca ibrida + reranking.** Non
+embedding *contro* parole chiave, ma **insieme**, alla MongoDB Atlas:
+- **keyword** con **BM25** (forte sui termini esatti e i nomi propri),
+- **vettori** per la vicinanza di significato,
+- fusione dei due ranking con **Reciprocal Rank Fusion (RRF)**,
+- **reranking** finale dei primi risultati con un cross-encoder.
+
+Così precisione e recall si coprono a vicenda, senza dover scegliere una soglia.
+È il lavoro dei repository a valle: **vectordatabase-documenti-papi** (ricerca
+ibrida e retrieval) e **textmining-documenti-papi** (analisi e viste aggregate).
