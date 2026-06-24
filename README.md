@@ -222,8 +222,9 @@ madre terra"*, la regola non lo riconosce come tema "ambiente". Superare questo
 L'analisi non vive qui. Prosegue in repository separati, alimentati da questo
 corpus markdown:
 
-- **enrichment** — carica e arricchisce i documenti in un database (topic,
-  entità, sentiment, frame morali/valoriali, embeddings, metriche di stile);
+- **enrichment** — carica e arricchisce i documenti in un **vector database
+  embedded e locale** (LanceDB): embeddings + ricerca ibrida, e a seguire topic,
+  entità, sentiment, frame morali/valoriali, metriche di stile;
 - **analisi & esposizione** — trend e narrazioni nel tempo, keyness tra Papi,
   RAG/Q&A, confronto fra pontificati, dashboard.
 
